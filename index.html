@@ -728,9 +728,11 @@ async function doRefresh(showSpinner) {
   if (showSpinner) spinner.classList.add('visible');
   refreshBtn.disabled = true;
   try {
-    const today = localDateStr();
-    // Pass date only — Toggl accepts YYYY-MM-DD and interprets in user's timezone
-    const entries = await togglGet(`/me/time_entries?start_date=${today}&end_date=${today}`);
+    // Construct UTC timestamp for local midnight — Toggl stores in UTC, accepts ISO with Z suffix
+    const now = new Date();
+    const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const startOfLocalDay = localMidnight.toISOString();
+    const entries = await togglGet(`/me/time_entries?start_date=${encodeURIComponent(startOfLocalDay)}`);
 
     const nowSec = Math.floor(Date.now() / 1000);
     const totals = {};
