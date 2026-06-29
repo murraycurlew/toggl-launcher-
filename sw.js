@@ -16,8 +16,8 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  // Network first for API calls, cache first for app shell
-  if (e.request.url.includes('toggl.com')) {
+  // Network first for API calls and proxy requests, cache first for app shell
+  if (e.request.url.includes('toggl.com') || e.request.url.includes('workers.dev')) {
     e.respondWith(fetch(e.request));
     return;
   }
