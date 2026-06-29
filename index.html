@@ -729,14 +729,8 @@ async function doRefresh(showSpinner) {
   refreshBtn.disabled = true;
   try {
     const today = localDateStr();
-    // Use timezone offset to anchor start of local day
-    const tzOffset = -new Date().getTimezoneOffset(); // minutes, positive = ahead of UTC
-    const sign  = tzOffset >= 0 ? '+' : '-';
-    const absOff = Math.abs(tzOffset);
-    const tzStr = `${sign}${String(Math.floor(absOff/60)).padStart(2,'0')}:${String(absOff%60).padStart(2,'0')}`;
-    const startOfDay = `${today}T00:00:00${tzStr}`;
-
-    const entries = await togglGet(`/me/time_entries?start_date=${encodeURIComponent(startOfDay)}`);
+    // Pass date only — Toggl accepts YYYY-MM-DD and interprets in user's timezone
+    const entries = await togglGet(`/me/time_entries?start_date=${today}&end_date=${today}`);
 
     const nowSec = Math.floor(Date.now() / 1000);
     const totals = {};
