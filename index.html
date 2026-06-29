@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0f1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Toggl Launcher</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  :root {
+    --bg:            #0f1117;
+    --surface:       #161924;
+    --surface-hover: #1e2133;
+    --border:        #252838;
+    --text:          #dde0f0;
+    --text-dim:      #626680;
+    --mono:          'Courier New', Courier, monospace;
+    --sans:          -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+
+    /* Project button states */
+    --col-zero:      #2a2318;   /* warm muted amber-brown — not started */
+    --col-zero-text: #a8936a;
+    --col-part:      #0d1f2d;   /* pale blue — in progress */
+    --col-part-text: #5ba3cc;
+    --col-done:      #0d2218;   /* green — completed */
+    --col-done-text: #4caf50;
+
+    /* Running state */
+    --col-run-bg:    #111d2e;
+    --col-run-ring:  #5b6af0;
+    --col-run-text:  #8b9cf5;
+
+    /* UI chrome */
+    --accent:        #5b6af0;
+    --accent-dim:    #3a4299;
+    --danger:        #c0392b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    overscroll-behavior: none;
+  }
+
+  /* ═══════════════════════════════════════
+     SETUP SCREEN
+  ═══════════════════════════════════════ */
+  #setup-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 32px 24px;
+    gap: 14px;
+  }
+
+  #setup-screen h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+
+  #setup-screen p {
+    font-size: 13px;
+    color: var(--text-dim);
+    text-align: center;
+    max-width: 300px;
+    line-height: 1.55;
+  }
+
+  .setup-field {
+    width: 100%;
+    max-width: 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .setup-field label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+  }
+
+  .setup-field input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 13px;
+    font-family: var(--mono);
+    padding: 11px 14px;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .setup-field input:focus { border-color: var(--accent); }
+
+  #setup-btn {
+    width: 100%;
+    max-width: 320px;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 13px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  #setup-btn:hover { background: var(--accent-dim); }
+  #setup-btn:disabled { opacity: 0.5; }
+
+  #setup-error {
+    font-size: 13px;
+    color: #e05555;
+    text-align: center;
+    max-width: 320px;
+    min-height: 18px;
+  }
+
+  #setup-note {
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    max-width: 300px;
+  }
+
+  /* ═══════════════════════════════════════
+     APP SHELL
+  ═══════════════════════════════════════ */
+  #app {
+    display: none;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+  }
+  #app.visible { display: flex; }
+
+  /* Top bar */
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    min-height: 44px;
+  }
+
+  #status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    flex-shrink: 0;
+    transition: background 0.3s;
+  }
+  #status-dot.ok  { background: #4caf50; }
+  #status-dot.err { background: #e05555; }
+
+  #status-text {
+    font-size: 12px;
+    color: var(--text-dim);
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #refresh-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #refresh-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #refresh-btn:disabled { opacity: 0.4; }
+
+  #reset-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 4px 2px;
+    opacity: 0.6;
+  }
+  #reset-btn:hover { opacity: 1; }
+
+  /* ═══════════════════════════════════════
+     PROJECT GRID
+  ═══════════════════════════════════════ */
+  #grid-view {
+    flex: 1;
+    overflow: hidden;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+  }
+
+  @media (min-width: 540px) {
+    #grid-view { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  }
+
+  .proj-btn {
+    background: var(--col-zero);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 14px 14px 12px;
+    text-align: left;
+    position: relative;
+    transition: filter 0.12s;
+    min-height: 0;
+  }
+  .proj-btn:hover  { filter: brightness(1.15); }
+  .proj-btn:active { filter: brightness(1.3); }
+
+  /* State: in progress */
+  .proj-btn.state-part { background: var(--col-part); }
+  /* State: done */
+  .proj-btn.state-done { background: var(--col-done); }
+  /* State: running */
+  .proj-btn.state-run  { background: var(--col-run-bg); }
+
+  .proj-name {
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--col-zero-text);
+    line-height: 1.2;
+  }
+  .proj-btn.state-part .proj-name { color: var(--col-part-text); }
+  .proj-btn.state-done .proj-name { color: var(--col-done-text); }
+  .proj-btn.state-run  .proj-name { color: var(--col-run-text); }
+
+  .proj-time {
+    font-size: 19px;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--col-zero-text);
+    line-height: 1;
+    margin-top: 10px;
+  }
+  .proj-btn.state-part .proj-time { color: var(--col-part-text); }
+  .proj-btn.state-done .proj-time { color: var(--col-done-text); }
+  .proj-btn.state-run  .proj-time { color: var(--col-run-text); }
+
+  /* Pulsing dot for running state */
+  .run-dot {
+    display: none;
+    position: absolute;
+    top: 10px; right: 10px;
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--col-run-text);
+    animation: pulse 1.6s ease-in-out infinite;
+  }
+  .proj-btn.state-run .run-dot { display: block; }
+
+  @keyframes pulse {
+    0%,100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.35; transform: scale(0.65); }
+  }
+
+  /* ═══════════════════════════════════════
+     TIMER VIEW (full screen)
+  ═══════════════════════════════════════ */
+  #timer-view {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 32px 24px 40px;
+    background: var(--bg);
+  }
+  #timer-view.visible { display: flex; }
+
+  #timer-project-name {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 36px;
+  }
+
+  /* Circular progress */
+  #timer-ring-wrap {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    flex-shrink: 0;
+  }
+
+  #timer-svg {
+    width: 100%; height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  #ring-track {
+    fill: none;
+    stroke: var(--border);
+    stroke-width: 10;
+  }
+
+  #ring-progress {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 10;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.9s linear, stroke 0.4s;
+  }
+
+  #timer-countdown {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 44px;
+    font-weight: 700;
+    font-family: var(--mono);
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  #timer-stop-btn {
+    margin-top: 44px;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 15px;
+    font-weight: 600;
+    padding: 13px 48px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  #timer-stop-btn:hover { border-color: var(--danger); color: var(--danger); }
+
+  /* ═══════════════════════════════════════
+     DONE VIEW
+  ═══════════════════════════════════════ */
+  #done-view {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 32px 24px 40px;
+    background: var(--bg);
+  }
+  #done-view.visible { display: flex; }
+
+  #done-check {
+    font-size: 48px;
+    line-height: 1;
+  }
+
+  #done-project-name {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+  }
+
+  #done-message {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--col-done-text);
+    margin-top: 4px;
+  }
+
+  #done-continue-btn {
+    margin-top: 28px;
+    background: var(--accent);
+    border: none;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    padding: 13px 48px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  #done-continue-btn:hover { background: var(--accent-dim); }
+
+  /* ═══════════════════════════════════════
+     SPINNER OVERLAY
+  ═══════════════════════════════════════ */
+  #spinner {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15,17,23,0.75);
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  #spinner.visible { display: flex; }
+
+  /* ═══════════════════════════════════════
+     RESPONSIVE HEIGHT — compact on short screens
+  ═══════════════════════════════════════ */
+  @media (max-height: 600px) {
+    #timer-ring-wrap { width: 160px; height: 160px; }
+    #timer-countdown { font-size: 34px; }
+    #timer-project-name { margin-bottom: 20px; }
+    #timer-stop-btn { margin-top: 28px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ── Setup screen ── -->
+<div id="setup-screen">
+  <h1>Toggl Launcher</h1>
+  <p>Enter your Toggl API token to get started.<br>Find it at toggl.com → Profile → API token.</p>
+  <div class="setup-field">
+    <label for="api-input">API Token</label>
+    <input id="api-input" type="password" placeholder="Paste token here" autocomplete="off" spellcheck="false">
+  </div>
+  <button id="setup-btn">Connect</button>
+  <div id="setup-error"></div>
+  <p id="setup-note">Stored in your browser only. Never sent anywhere except Toggl.</p>
+</div>
+
+<!-- ── App shell ── -->
+<div id="app">
+
+  <!-- Top bar -->
+  <div id="topbar">
+    <div id="status-dot"></div>
+    <span id="status-text">Loading…</span>
+    <button id="refresh-btn">↻ Refresh</button>
+    <button id="reset-btn" title="Change token">⚙</button>
+  </div>
+
+  <!-- Project grid -->
+  <div id="grid-view"></div>
+
+  <!-- Timer view -->
+  <div id="timer-view">
+    <div id="timer-project-name"></div>
+    <div id="timer-ring-wrap">
+      <svg id="timer-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+        <circle id="ring-track"    cx="50" cy="50" r="44"/>
+        <circle id="ring-progress" cx="50" cy="50" r="44"/>
+      </svg>
+      <div id="timer-countdown">15:00</div>
+    </div>
+    <button id="timer-stop-btn">Stop</button>
+  </div>
+
+  <!-- Done view -->
+  <div id="done-view">
+    <div id="done-check">✓</div>
+    <div id="done-project-name"></div>
+    <div id="done-message">Session complete</div>
+    <button id="done-continue-btn">Continue</button>
+  </div>
+
+</div>
+
+<!-- Spinner -->
+<div id="spinner">Working…</div>
+
+<script>
+'use strict';
+
+// ── Constants ────────────────────────────────────────────
+const SESSION_SECS   = 15 * 60;       // 15 minutes per session
+const THRESHOLD_SECS = 30 * 60;       // 30 minutes = done
+const POLL_MS        = 15 * 60 * 1000; // 15-minute auto-poll
+const PROJECT_ORDER  = ['HOME','HEALTH','GTD','WORK CM','WORK CLASS','QTU','FINANCES','KIDS+PPL'];
+
+// Circumference of ring (r=44)
+const CIRC = 2 * Math.PI * 44; // ≈ 276.46
+
+// ── State ────────────────────────────────────────────────
+let apiToken     = '';
+let workspaceId  = null;
+let projects     = [];      // [{id, name}]
+let todayTotals  = {};      // projectId → seconds (completed sessions only)
+let runningEntry = null;    // Toggl time_entry object or null
+let runningProjectId = null;
+
+let sessionSecsLeft  = SESSION_SECS;
+let sessionInterval  = null;   // ticks every second during a session
+let pollTimer        = null;
+let wakeLock         = null;
+
+// ── DOM ──────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const setupScreen   = $('setup-screen');
+const apiInput      = $('api-input');
+const setupBtn      = $('setup-btn');
+const setupError    = $('setup-error');
+const app           = $('app');
+const statusDot     = $('status-dot');
+const statusText    = $('status-text');
+const refreshBtn    = $('refresh-btn');
+const resetBtn      = $('reset-btn');
+const gridView      = $('grid-view');
+const timerView     = $('timer-view');
+const timerProjName = $('timer-project-name');
+const ringProgress  = $('ring-progress');
+const timerCountdown= $('timer-countdown');
+const timerStopBtn  = $('timer-stop-btn');
+const doneView      = $('done-view');
+const doneProjName  = $('done-project-name');
+const doneMessage   = $('done-message');
+const doneContinueBtn = $('done-continue-btn');
+const spinner       = $('spinner');
+
+// ── Ring helpers ─────────────────────────────────────────
+ringProgress.style.strokeDasharray  = CIRC;
+ringProgress.style.strokeDashoffset = 0;
+
+function setRing(secsLeft) {
+  const frac = Math.max(0, secsLeft / SESSION_SECS);
+  ringProgress.style.strokeDashoffset = CIRC * (1 - frac);
+  // Colour: accent → green as we approach done
+  ringProgress.style.stroke = frac < 0.25 ? '#4caf50' : 'var(--accent)';
+}
+
+function fmtCountdown(secs) {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+
+function fmtTotal(secs) {
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  if (h > 0) return `${h}h${String(m).padStart(2,'0')}`;
+  return `${String(m).padStart(2,'0')}m`;
+}
+
+// ── API ──────────────────────────────────────────────────
+function authHeader() {
+  return 'Basic ' + btoa(apiToken + ':api_token');
+}
+
+async function togglGet(path) {
+  const r = await fetch('https://api.track.toggl.com/api/v9' + path, {
+    headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' }
+  });
+  if (!r.ok) throw new Error(`${r.status}`);
+  return r.json();
+}
+
+async function togglPost(path, body) {
+  const r = await fetch('https://api.track.toggl.com/api/v9' + path, {
+    method: 'POST',
+    headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(`${r.status}`);
+  return r.json();
+}
+
+async function togglPatch(path) {
+  const r = await fetch('https://api.track.toggl.com/api/v9' + path, {
+    method: 'PATCH',
+    headers: { 'Authorization': authHeader(), 'Content-Type': 'application/json' }
+  });
+  if (!r.ok) throw new Error(`${r.status}`);
+  return r.json();
+}
+
+// ── Boot ─────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const stored = localStorage.getItem('toggl_token');
+  if (stored) { apiToken = stored; startApp(); }
+
+  setupBtn.addEventListener('click', handleSetup);
+  apiInput.addEventListener('keydown', e => { if (e.key === 'Enter') handleSetup(); });
+  refreshBtn.addEventListener('click', () => doRefresh(true));
+  resetBtn.addEventListener('click', resetToken);
+  timerStopBtn.addEventListener('click', handleManualStop);
+  doneContinueBtn.addEventListener('click', handleContinue);
+
+  // Re-acquire wake lock when page becomes visible again
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible' && sessionInterval) {
+      await acquireWakeLock();
+    }
+  });
+
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
+
+  // Request notification permission early (non-blocking)
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {});
+  }
+});
+
+async function handleSetup() {
+  const val = apiInput.value.trim();
+  if (!val) return;
+  setupError.textContent = '';
+  setupBtn.disabled = true;
+  setupBtn.textContent = 'Connecting…';
+  try {
+    apiToken = val;
+    await togglGet('/me');
+    localStorage.setItem('toggl_token', val);
+    startApp();
+  } catch(e) {
+    setupError.textContent = 'Could not connect — check your token and try again.';
+    setupBtn.disabled = false;
+    setupBtn.textContent = 'Connect';
+  }
+}
+
+// ── App start ────────────────────────────────────────────
+async function startApp() {
+  setupScreen.style.display = 'none';
+  app.classList.add('visible');
+  setStatus('', 'Loading…');
+  spinner.classList.add('visible');
+
+  try {
+    const me = await togglGet('/me');
+    workspaceId = me.default_workspace_id;
+
+    const projs = await togglGet(`/workspaces/${workspaceId}/projects?active=true`);
+    const ordered = [];
+    for (const name of PROJECT_ORDER) {
+      const found = projs.find(p => p.name === name);
+      if (found) ordered.push({ id: found.id, name: found.name });
+    }
+    // Any extras not in our list
+    for (const p of projs) {
+      if (!ordered.find(o => o.id === p.id)) ordered.push({ id: p.id, name: p.name });
+    }
+    projects = ordered;
+
+    buildGrid();
+    await doRefresh(false);
+    startPollTimer();
+  } catch(e) {
+    setStatus('err', 'Load error: ' + e.message);
+  } finally {
+    spinner.classList.remove('visible');
+  }
+}
+
+// ── Grid ─────────────────────────────────────────────────
+function buildGrid() {
+  gridView.innerHTML = '';
+  for (const proj of projects) {
+    const btn = document.createElement('button');
+    btn.className = 'proj-btn state-zero';
+    btn.id = 'proj-' + proj.id;
+    btn.innerHTML = `
+      <div class="run-dot"></div>
+      <div class="proj-name">${proj.name}</div>
+      <div class="proj-time" id="time-${proj.id}">0m</div>
+    `;
+    btn.addEventListener('click', () => handleProjectTap(proj));
+    gridView.appendChild(btn);
+  }
+}
+
+function updateGrid() {
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  for (const proj of projects) {
+    const btn  = $('proj-' + proj.id);
+    const timeEl = $('time-' + proj.id);
+    if (!btn || !timeEl) continue;
+
+    const isRunning = runningProjectId === proj.id;
+    let total = todayTotals[proj.id] || 0;
+
+    // Add live elapsed for running project
+    if (isRunning && runningEntry) {
+      const elapsed = nowSec + runningEntry.duration; // duration is negative start epoch
+      total += elapsed;
+    }
+
+    // State class
+    let state = 'state-zero';
+    if (isRunning)            state = 'state-run';
+    else if (total >= THRESHOLD_SECS) state = 'state-done';
+    else if (total > 0)       state = 'state-part';
+
+    btn.className = 'proj-btn ' + state;
+    timeEl.textContent = fmtTotal(total);
+  }
+}
+
+// ── Refresh ──────────────────────────────────────────────
+async function doRefresh(showSpinner) {
+  if (showSpinner) spinner.classList.add('visible');
+  refreshBtn.disabled = true;
+  try {
+    const today = localDateStr();
+    // Use timezone offset to anchor start of local day
+    const tzOffset = -new Date().getTimezoneOffset(); // minutes, positive = ahead of UTC
+    const sign  = tzOffset >= 0 ? '+' : '-';
+    const absOff = Math.abs(tzOffset);
+    const tzStr = `${sign}${String(Math.floor(absOff/60)).padStart(2,'0')}:${String(absOff%60).padStart(2,'0')}`;
+    const startOfDay = `${today}T00:00:00${tzStr}`;
+
+    const entries = await togglGet(`/me/time_entries?start_date=${encodeURIComponent(startOfDay)}`);
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const totals = {};
+    for (const p of projects) totals[p.id] = 0;
+
+    let found = null;
+    for (const e of entries) {
+      if (!e.project_id || !(e.project_id in totals)) continue;
+      if (e.duration < 0) {
+        // Running entry — don't add to completed totals; track separately
+        found = e;
+      } else {
+        totals[e.project_id] += e.duration;
+      }
+    }
+
+    todayTotals  = totals;
+    runningEntry = found;
+    runningProjectId = found ? found.project_id : null;
+
+    updateGrid();
+    setStatus('ok', runningProjectId
+      ? `Running: ${projects.find(p => p.id === runningProjectId)?.name ?? '?'}`
+      : 'No timer running');
+  } catch(e) {
+    setStatus('err', 'Refresh failed');
+  } finally {
+    if (showSpinner) spinner.classList.remove('visible');
+    refreshBtn.disabled = false;
+  }
+}
+
+function startPollTimer() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(() => doRefresh(false), POLL_MS);
+}
+
+// ── Project tap → start session ──────────────────────────
+async function handleProjectTap(proj) {
+  spinner.classList.add('visible');
+  try {
+    // Stop any running entry first
+    if (runningEntry) {
+      await togglPatch(`/workspaces/${workspaceId}/time_entries/${runningEntry.id}/stop`);
+    }
+
+    // Start new entry
+    const now = new Date().toISOString();
+    const entry = await togglPost(`/workspaces/${workspaceId}/time_entries`, {
+      created_with: 'toggl-launcher',
+      description:  '',
+      project_id:   proj.id,
+      workspace_id: workspaceId,
+      duration:     -1,
+      start:        now,
+      billable:     false
+    });
+
+    runningEntry     = entry;
+    runningProjectId = proj.id;
+
+    // Update completed totals from refresh (fire and forget, don't await)
+    doRefresh(false);
+
+    // Launch timer view
+    showTimerView(proj);
+  } catch(e) {
+    setStatus('err', 'Start failed: ' + e.message);
+    spinner.classList.remove('visible');
+  }
+}
+
+// ── Timer view ───────────────────────────────────────────
+async function showTimerView(proj) {
+  spinner.classList.remove('visible');
+  gridView.style.display = 'none';
+  timerView.classList.add('visible');
+  doneView.classList.remove('visible');
+
+  timerProjName.textContent = proj.name;
+  sessionSecsLeft = SESSION_SECS;
+  timerCountdown.textContent = fmtCountdown(sessionSecsLeft);
+  setRing(sessionSecsLeft);
+
+  await acquireWakeLock();
+  startSessionTick(proj);
+}
+
+function startSessionTick(proj) {
+  if (sessionInterval) clearInterval(sessionInterval);
+  sessionInterval = setInterval(async () => {
+    sessionSecsLeft--;
+    timerCountdown.textContent = fmtCountdown(sessionSecsLeft);
+    setRing(sessionSecsLeft);
+
+    // Also live-update the running project's grid cell
+    updateGrid();
+
+    if (sessionSecsLeft <= 0) {
+      clearInterval(sessionInterval);
+      sessionInterval = null;
+      await autoStop(proj);
+    }
+  }, 1000);
+}
+
+// ── Stop ─────────────────────────────────────────────────
+async function handleManualStop() {
+  if (sessionInterval) { clearInterval(sessionInterval); sessionInterval = null; }
+  releaseWakeLock();
+  spinner.classList.add('visible');
+  try {
+    if (runningEntry) {
+      await togglPatch(`/workspaces/${workspaceId}/time_entries/${runningEntry.id}/stop`);
+    }
+    runningEntry     = null;
+    runningProjectId = null;
+    await doRefresh(false);
+    showGrid();
+  } catch(e) {
+    setStatus('err', 'Stop failed');
+  } finally {
+    spinner.classList.remove('visible');
+  }
+}
+
+async function autoStop(proj) {
+  releaseWakeLock();
+  try {
+    if (runningEntry) {
+      await togglPatch(`/workspaces/${workspaceId}/time_entries/${runningEntry.id}/stop`);
+    }
+    runningEntry     = null;
+    runningProjectId = null;
+    await doRefresh(false);
+  } catch(e) {
+    // Carry on to done view regardless
+  }
+  fireNotification(proj.name);
+  showDoneView(proj);
+}
+
+// ── Done view ────────────────────────────────────────────
+function showDoneView(proj) {
+  timerView.classList.remove('visible');
+  gridView.style.display = 'none';
+  doneView.classList.add('visible');
+  doneProjName.textContent = proj.name;
+  doneMessage.textContent  = 'Session complete';
+}
+
+async function handleContinue() {
+  doneView.classList.remove('visible');
+  spinner.classList.add('visible');
+  await doRefresh(false);
+  spinner.classList.remove('visible');
+  showGrid();
+}
+
+function showGrid() {
+  timerView.classList.remove('visible');
+  doneView.classList.remove('visible');
+  gridView.style.display = '';
+  updateGrid();
+}
+
+// ── Notification ─────────────────────────────────────────
+function fireNotification(projectName) {
+  if (!('Notification' in window)) return;
+  if (Notification.permission !== 'granted') return;
+  try {
+    new Notification(`Session complete — ${projectName}`, {
+      body: '15 minutes logged.',
+      icon: './icon.svg',
+      silent: false
+    });
+  } catch(e) {}
+}
+
+// ── Wake Lock ────────────────────────────────────────────
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) return;
+  try {
+    wakeLock = await navigator.wakeLock.request('screen');
+  } catch(e) {}
+}
+
+function releaseWakeLock() {
+  if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+}
+
+// ── Utilities ────────────────────────────────────────────
+function localDateStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' +
+    String(d.getMonth()+1).padStart(2,'0') + '-' +
+    String(d.getDate()).padStart(2,'0');
+}
+
+function setStatus(state, msg) {
+  statusDot.className = state;
+  statusText.textContent = msg;
+}
+
+function resetToken() {
+  if (!confirm('Clear saved token and start over?')) return;
+  clearInterval(pollTimer);
+  clearInterval(sessionInterval);
+  releaseWakeLock();
+  localStorage.removeItem('toggl_token');
+  location.reload();
+}
+</script>
+</body>
+</html>

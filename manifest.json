@@ -1,0 +1,18 @@
+{
+  "name": "Toggl Launcher",
+  "short_name": "Launcher",
+  "description": "Project-first Toggl timer interface",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0f1117",
+  "theme_color": "#0f1117",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
