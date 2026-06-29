@@ -20,11 +20,11 @@
     --sans:          -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 
     /* Project button states */
-    --col-zero:      #2a2318;   /* warm muted amber-brown — not started */
+    --col-zero:      #2a2318;
     --col-zero-text: #a8936a;
-    --col-part:      #0d1f2d;   /* pale blue — in progress */
+    --col-part:      #0d1f2d;
     --col-part-text: #5ba3cc;
-    --col-done:      #0d2218;   /* green — completed */
+    --col-done:      #0d2218;
     --col-done-text: #4caf50;
 
     /* Running state */
@@ -48,9 +48,6 @@
     overscroll-behavior: none;
   }
 
-  /* ═══════════════════════════════════════
-     SETUP SCREEN
-  ═══════════════════════════════════════ */
   #setup-screen {
     display: flex;
     flex-direction: column;
@@ -136,9 +133,6 @@
     max-width: 300px;
   }
 
-  /* ═══════════════════════════════════════
-     APP SHELL
-  ═══════════════════════════════════════ */
   #app {
     display: none;
     flex-direction: column;
@@ -147,7 +141,6 @@
   }
   #app.visible { display: flex; }
 
-  /* Top bar */
   #topbar {
     display: flex;
     align-items: center;
@@ -203,9 +196,6 @@
   }
   #reset-btn:hover { opacity: 1; }
 
-  /* ═══════════════════════════════════════
-     PROJECT GRID
-  ═══════════════════════════════════════ */
   #grid-view {
     flex: 1;
     overflow: hidden;
@@ -235,11 +225,8 @@
   .proj-btn:hover  { filter: brightness(1.15); }
   .proj-btn:active { filter: brightness(1.3); }
 
-  /* State: in progress */
   .proj-btn.state-part { background: var(--col-part); }
-  /* State: done */
   .proj-btn.state-done { background: var(--col-done); }
-  /* State: running */
   .proj-btn.state-run  { background: var(--col-run-bg); }
 
   .proj-name {
@@ -265,7 +252,6 @@
   .proj-btn.state-done .proj-time { color: var(--col-done-text); }
   .proj-btn.state-run  .proj-time { color: var(--col-run-text); }
 
-  /* Pulsing dot for running state */
   .run-dot {
     display: none;
     position: absolute;
@@ -282,9 +268,6 @@
     50%      { opacity: 0.35; transform: scale(0.65); }
   }
 
-  /* ═══════════════════════════════════════
-     TIMER VIEW (full screen)
-  ═══════════════════════════════════════ */
   #timer-view {
     display: none;
     flex: 1;
@@ -306,7 +289,6 @@
     margin-bottom: 36px;
   }
 
-  /* Circular progress */
   #timer-ring-wrap {
     position: relative;
     width: 220px;
@@ -360,9 +342,6 @@
   }
   #timer-stop-btn:hover { border-color: var(--danger); color: var(--danger); }
 
-  /* ═══════════════════════════════════════
-     DONE VIEW
-  ═══════════════════════════════════════ */
   #done-view {
     display: none;
     flex: 1;
@@ -409,9 +388,6 @@
   }
   #done-continue-btn:hover { background: var(--accent-dim); }
 
-  /* ═══════════════════════════════════════
-     SPINNER OVERLAY
-  ═══════════════════════════════════════ */
   #spinner {
     display: none;
     position: fixed;
@@ -425,9 +401,6 @@
   }
   #spinner.visible { display: flex; }
 
-  /* ═══════════════════════════════════════
-     RESPONSIVE HEIGHT — compact on short screens
-  ═══════════════════════════════════════ */
   @media (max-height: 600px) {
     #timer-ring-wrap { width: 160px; height: 160px; }
     #timer-countdown { font-size: 34px; }
@@ -438,7 +411,6 @@
 </head>
 <body>
 
-<!-- ── Setup screen ── -->
 <div id="setup-screen">
   <h1>Toggl Launcher</h1>
   <p>Enter your Toggl API token to get started.<br>Find it at toggl.com → Profile → API token.</p>
@@ -451,10 +423,7 @@
   <p id="setup-note">Stored in your browser only. Never sent anywhere except Toggl.</p>
 </div>
 
-<!-- ── App shell ── -->
 <div id="app">
-
-  <!-- Top bar -->
   <div id="topbar">
     <div id="status-dot"></div>
     <span id="status-text">Loading…</span>
@@ -462,10 +431,8 @@
     <button id="reset-btn" title="Change token">⚙</button>
   </div>
 
-  <!-- Project grid -->
   <div id="grid-view"></div>
 
-  <!-- Timer view -->
   <div id="timer-view">
     <div id="timer-project-name"></div>
     <div id="timer-ring-wrap">
@@ -478,45 +445,37 @@
     <button id="timer-stop-btn">Stop</button>
   </div>
 
-  <!-- Done view -->
   <div id="done-view">
     <div id="done-check">✓</div>
     <div id="done-project-name"></div>
     <div id="done-message">Session complete</div>
     <button id="done-continue-btn">Continue</button>
   </div>
-
 </div>
 
-<!-- Spinner -->
 <div id="spinner">Working…</div>
 
 <script>
 'use strict';
 
-// ── Constants ────────────────────────────────────────────
-const SESSION_SECS   = 15 * 60;       // 15 minutes per session
-const THRESHOLD_SECS = 30 * 60;       // 30 minutes = done
-const POLL_MS        = 15 * 60 * 1000; // 15-minute auto-poll
+const SESSION_SECS   = 15 * 60;
+const THRESHOLD_SECS = 30 * 60;
+const POLL_MS        = 15 * 60 * 1000;
 const PROJECT_ORDER  = ['HOME','HEALTH','GTD','WORK CM','WORK CLASS','QTU','FINANCES','KIDS+PPL'];
+const CIRC = 2 * Math.PI * 44;
 
-// Circumference of ring (r=44)
-const CIRC = 2 * Math.PI * 44; // ≈ 276.46
-
-// ── State ────────────────────────────────────────────────
 let apiToken     = '';
 let workspaceId  = null;
-let projects     = [];      // [{id, name}]
-let todayTotals  = {};      // projectId → seconds (completed sessions only)
-let runningEntry = null;    // Toggl time_entry object or null
+let projects     = [];
+let todayTotals  = {};
+let runningEntry = null;
 let runningProjectId = null;
 
 let sessionSecsLeft  = SESSION_SECS;
-let sessionInterval  = null;   // ticks every second during a session
+let sessionInterval  = null;
 let pollTimer        = null;
 let wakeLock         = null;
 
-// ── DOM ──────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const setupScreen   = $('setup-screen');
 const apiInput      = $('api-input');
@@ -539,14 +498,12 @@ const doneMessage   = $('done-message');
 const doneContinueBtn = $('done-continue-btn');
 const spinner       = $('spinner');
 
-// ── Ring helpers ─────────────────────────────────────────
 ringProgress.style.strokeDasharray  = CIRC;
 ringProgress.style.strokeDashoffset = 0;
 
 function setRing(secsLeft) {
   const frac = Math.max(0, secsLeft / SESSION_SECS);
   ringProgress.style.strokeDashoffset = CIRC * (1 - frac);
-  // Colour: accent → green as we approach done
   ringProgress.style.stroke = frac < 0.25 ? '#4caf50' : 'var(--accent)';
 }
 
@@ -563,7 +520,6 @@ function fmtTotal(secs) {
   return `${String(m).padStart(2,'0')}m`;
 }
 
-// ── API ──────────────────────────────────────────────────
 const API_BASE = 'https://silent-hill-df64.murraycarew.workers.dev/api/v9';
 
 function authHeader() {
@@ -597,7 +553,6 @@ async function togglPatch(path) {
   return r.json();
 }
 
-// ── Boot ─────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
   const stored = localStorage.getItem('toggl_token');
   if (stored) { apiToken = stored; startApp(); }
@@ -609,19 +564,16 @@ window.addEventListener('DOMContentLoaded', () => {
   timerStopBtn.addEventListener('click', handleManualStop);
   doneContinueBtn.addEventListener('click', handleContinue);
 
-  // Re-acquire wake lock when page becomes visible again
   document.addEventListener('visibilitychange', async () => {
     if (document.visibilityState === 'visible' && sessionInterval) {
       await acquireWakeLock();
     }
   });
 
-  // Register service worker
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
   }
 
-  // Request notification permission early (non-blocking)
   if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission().catch(() => {});
   }
@@ -645,7 +597,6 @@ async function handleSetup() {
   }
 }
 
-// ── App start ────────────────────────────────────────────
 async function startApp() {
   setupScreen.style.display = 'none';
   app.classList.add('visible');
@@ -662,7 +613,6 @@ async function startApp() {
       const found = projs.find(p => p.name === name);
       if (found) ordered.push({ id: found.id, name: found.name });
     }
-    // Any extras not in our list
     for (const p of projs) {
       if (!ordered.find(o => o.id === p.id)) ordered.push({ id: p.id, name: p.name });
     }
@@ -678,7 +628,6 @@ async function startApp() {
   }
 }
 
-// ── Grid ─────────────────────────────────────────────────
 function buildGrid() {
   gridView.innerHTML = '';
   for (const proj of projects) {
@@ -699,36 +648,33 @@ function updateGrid() {
   const nowSec = Math.floor(Date.now() / 1000);
 
   for (const proj of projects) {
-    const btn  = $('proj-' + proj.id);
+    const btn    = $('proj-' + proj.id);
     const timeEl = $('time-' + proj.id);
     if (!btn || !timeEl) continue;
 
     const isRunning = runningProjectId === proj.id;
     let total = todayTotals[proj.id] || 0;
 
-    // Add live elapsed for running project
+    // Add live elapsed for running project — FIXED: clamp to zero minimum
     if (isRunning && runningEntry) {
-      const elapsed = nowSec + runningEntry.duration; // duration is negative start epoch
+      const elapsed = Math.max(0, nowSec + runningEntry.duration);
       total += elapsed;
     }
 
-    // State class
     let state = 'state-zero';
-    if (isRunning)            state = 'state-run';
+    if (isRunning)                    state = 'state-run';
     else if (total >= THRESHOLD_SECS) state = 'state-done';
-    else if (total > 0)       state = 'state-part';
+    else if (total > 0)               state = 'state-part';
 
     btn.className = 'proj-btn ' + state;
     timeEl.textContent = fmtTotal(total);
   }
 }
 
-// ── Refresh ──────────────────────────────────────────────
 async function doRefresh(showSpinner) {
   if (showSpinner) spinner.classList.add('visible');
   refreshBtn.disabled = true;
   try {
-    // Construct UTC timestamps for local day boundaries
     const now = new Date();
     const localMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
     const localEndOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
@@ -736,7 +682,6 @@ async function doRefresh(showSpinner) {
     const endOfLocalDay = localEndOfDay.toISOString();
     const entries = await togglGet(`/me/time_entries?start_date=${encodeURIComponent(startOfLocalDay)}&end_date=${encodeURIComponent(endOfLocalDay)}`);
 
-    const nowSec = Math.floor(Date.now() / 1000);
     const totals = {};
     for (const p of projects) totals[p.id] = 0;
 
@@ -744,15 +689,14 @@ async function doRefresh(showSpinner) {
     for (const e of entries) {
       if (!e.project_id || !(e.project_id in totals)) continue;
       if (e.duration < 0) {
-        // Running entry — don't add to completed totals; track separately
         found = e;
       } else {
         totals[e.project_id] += e.duration;
       }
     }
 
-    todayTotals  = totals;
-    runningEntry = found;
+    todayTotals      = totals;
+    runningEntry     = found;
     runningProjectId = found ? found.project_id : null;
 
     updateGrid();
@@ -772,16 +716,13 @@ function startPollTimer() {
   pollTimer = setInterval(() => doRefresh(false), POLL_MS);
 }
 
-// ── Project tap → start session ──────────────────────────
 async function handleProjectTap(proj) {
   spinner.classList.add('visible');
   try {
-    // Stop any running entry first
     if (runningEntry) {
       await togglPatch(`/workspaces/${workspaceId}/time_entries/${runningEntry.id}/stop`);
     }
 
-    // Start new entry
     const now = new Date().toISOString();
     const entry = await togglPost(`/workspaces/${workspaceId}/time_entries`, {
       created_with: 'toggl-launcher',
@@ -796,10 +737,7 @@ async function handleProjectTap(proj) {
     runningEntry     = entry;
     runningProjectId = proj.id;
 
-    // Update completed totals from refresh (fire and forget, don't await)
     doRefresh(false);
-
-    // Launch timer view
     showTimerView(proj);
   } catch(e) {
     setStatus('err', 'Start failed: ' + e.message);
@@ -807,7 +745,6 @@ async function handleProjectTap(proj) {
   }
 }
 
-// ── Timer view ───────────────────────────────────────────
 async function showTimerView(proj) {
   spinner.classList.remove('visible');
   gridView.style.display = 'none';
@@ -829,8 +766,6 @@ function startSessionTick(proj) {
     sessionSecsLeft--;
     timerCountdown.textContent = fmtCountdown(sessionSecsLeft);
     setRing(sessionSecsLeft);
-
-    // Also live-update the running project's grid cell
     updateGrid();
 
     if (sessionSecsLeft <= 0) {
@@ -841,7 +776,6 @@ function startSessionTick(proj) {
   }, 1000);
 }
 
-// ── Stop ─────────────────────────────────────────────────
 async function handleManualStop() {
   if (sessionInterval) { clearInterval(sessionInterval); sessionInterval = null; }
   releaseWakeLock();
@@ -870,14 +804,11 @@ async function autoStop(proj) {
     runningEntry     = null;
     runningProjectId = null;
     await doRefresh(false);
-  } catch(e) {
-    // Carry on to done view regardless
-  }
+  } catch(e) {}
   fireNotification(proj.name);
   showDoneView(proj);
 }
 
-// ── Done view ────────────────────────────────────────────
 function showDoneView(proj) {
   timerView.classList.remove('visible');
   gridView.style.display = 'none';
@@ -901,7 +832,6 @@ function showGrid() {
   updateGrid();
 }
 
-// ── Notification ─────────────────────────────────────────
 function fireNotification(projectName) {
   if (!('Notification' in window)) return;
   if (Notification.permission !== 'granted') return;
@@ -914,7 +844,6 @@ function fireNotification(projectName) {
   } catch(e) {}
 }
 
-// ── Wake Lock ────────────────────────────────────────────
 async function acquireWakeLock() {
   if (!('wakeLock' in navigator)) return;
   try {
@@ -926,7 +855,6 @@ function releaseWakeLock() {
   if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
 }
 
-// ── Utilities ────────────────────────────────────────────
 function localDateStr() {
   const d = new Date();
   return d.getFullYear() + '-' +
