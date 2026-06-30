@@ -475,6 +475,7 @@ let sessionSecsLeft  = SESSION_SECS;
 let sessionInterval  = null;
 let pollTimer        = null;
 let wakeLock         = null;
+let justStartedLocally = false; // guards against doRefresh re-routing the device that just initiated a session
 
 const $ = id => document.getElementById(id);
 const setupScreen   = $('setup-screen');
@@ -655,9 +656,11 @@ function updateGrid() {
     const isRunning = runningProjectId === proj.id;
     let total = todayTotals[proj.id] || 0;
 
-    // Add live elapsed for running project — FIXED: clamp to zero minimum
+    // Add live elapsed for running project — computed from entry.start, not the
+    // duration field, since duration on a running entry is -start_unix and is
+    // unreliable to reconstruct elapsed time from on a device that didn't start it.
     if (isRunning && runningEntry) {
-      const elapsed = Math.max(0, nowSec + runningEntry.duration);
+      const elapsed = getRunningElapsedSecs();
       total += elapsed;
     }
 
@@ -669,6 +672,20 @@ function updateGrid() {
     btn.className = 'proj-btn ' + state;
     timeEl.textContent = fmtTotal(total);
   }
+}
+
+// Computes elapsed seconds for the currently running entry using its `start`
+// ISO timestamp as the source of truth, rather than the API's `duration` field
+// (which is -start_unix and easy to misuse). Caps at 24h as a sanity bound —
+// if it ever exceeds that, something is wrong upstream and we treat as 0
+// rather than rendering a garbage value like "495216h".
+function getRunningElapsedSecs() {
+  if (!runningEntry || !runningEntry.start) return 0;
+  const startMs = new Date(runningEntry.start).getTime();
+  if (Number.isNaN(startMs)) return 0;
+  const elapsed = Math.floor((Date.now() - startMs) / 1000);
+  if (elapsed < 0 || elapsed > 86400) return 0;
+  return elapsed;
 }
 
 async function doRefresh(showSpinner) {
@@ -695,6 +712,15 @@ async function doRefresh(showSpinner) {
       }
     }
 
+    // Was this device already tracking this same running entry locally
+    // (i.e. it's the device that started the session, and the countdown
+    // is already ticking — or about to be)? If so, leave the local timer
+    // view alone — don't re-route or reset it.
+    const alreadyTrackingLocally =
+      found && runningEntry && found.id === runningEntry.id &&
+      (sessionInterval || justStartedLocally);
+    justStartedLocally = false;
+
     todayTotals      = totals;
     runningEntry     = found;
     runningProjectId = found ? found.project_id : null;
@@ -703,12 +729,48 @@ async function doRefresh(showSpinner) {
     setStatus('ok', runningProjectId
       ? `Running: ${projects.find(p => p.id === runningProjectId)?.name ?? '?'}`
       : 'No timer running');
+
+    if (found && !alreadyTrackingLocally) {
+      await handleDetectedRunningEntry(found);
+    }
   } catch(e) {
     setStatus('err', 'Refresh failed');
   } finally {
     if (showSpinner) spinner.classList.remove('visible');
     refreshBtn.disabled = false;
   }
+}
+
+// Handles a running entry detected from the API that this device wasn't
+// already actively timing (e.g. started on another device, or this device
+// just loaded/refreshed mid-session). Routes to the timer view with the
+// true remaining time, or auto-stops immediately if 15+ minutes have
+// already elapsed (safety net for a session whose originating device
+// dropped out without stopping cleanly).
+async function handleDetectedRunningEntry(entry) {
+  const proj = projects.find(p => p.id === entry.project_id);
+  if (!proj) return;
+
+  const elapsed = getRunningElapsedSecs();
+  const remaining = SESSION_SECS - elapsed;
+
+  if (remaining <= 0) {
+    await autoStop(proj);
+    return;
+  }
+
+  spinner.classList.remove('visible');
+  gridView.style.display = 'none';
+  timerView.classList.add('visible');
+  doneView.classList.remove('visible');
+
+  timerProjName.textContent = proj.name;
+  sessionSecsLeft = remaining;
+  timerCountdown.textContent = fmtCountdown(sessionSecsLeft);
+  setRing(sessionSecsLeft);
+
+  await acquireWakeLock();
+  startSessionTick(proj);
 }
 
 function startPollTimer() {
@@ -736,6 +798,7 @@ async function handleProjectTap(proj) {
 
     runningEntry     = entry;
     runningProjectId = proj.id;
+    justStartedLocally = true;
 
     doRefresh(false);
     showTimerView(proj);
@@ -822,7 +885,13 @@ async function handleContinue() {
   spinner.classList.add('visible');
   await doRefresh(false);
   spinner.classList.remove('visible');
-  showGrid();
+  // doRefresh may have already routed to the timer view (e.g. a session was
+  // started on another device while this one sat on the done screen) or
+  // auto-stopped a stale entry. Only fall back to the grid if neither
+  // happened.
+  if (!timerView.classList.contains('visible') && !doneView.classList.contains('visible')) {
+    showGrid();
+  }
 }
 
 function showGrid() {
