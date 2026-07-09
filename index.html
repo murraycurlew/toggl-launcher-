@@ -566,8 +566,28 @@ window.addEventListener('DOMContentLoaded', () => {
   doneContinueBtn.addEventListener('click', handleContinue);
 
   document.addEventListener('visibilitychange', async () => {
-    if (document.visibilityState === 'visible' && sessionInterval) {
-      await acquireWakeLock();
+    if (document.visibilityState !== 'visible') return;
+    await acquireWakeLock();
+    if (!sessionInterval || !runningEntry) return;
+
+    // Resync countdown from real elapsed time. Android suspends setInterval
+    // when the screen locks, causing the local countdown to drift behind
+    // reality. On tab resume, recalculate from the entry's actual start
+    // timestamp so the display and auto-stop are accurate.
+    const elapsed = getRunningElapsedSecs();
+    const corrected = SESSION_SECS - elapsed;
+
+    if (corrected <= 0) {
+      // Session already over while screen was locked — stop now.
+      clearInterval(sessionInterval);
+      sessionInterval = null;
+      const proj = projects.find(p => p.id === runningProjectId);
+      if (proj) await autoStop(proj);
+    } else {
+      // Correct the remaining time and let the tick continue.
+      sessionSecsLeft = corrected;
+      timerCountdown.textContent = fmtCountdown(sessionSecsLeft);
+      setRing(sessionSecsLeft);
     }
   });
 
